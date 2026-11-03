@@ -71,6 +71,64 @@ GLuint createProgram() {
     return program;
 }
 
+struct Camera {
+    float yaw = 0.6f;
+    float pitch = 0.4f;
+    float distance = 3.0f;
+    bool dragging = false;
+    double lastX = 0.0;
+    double lastY = 0.0;
+    bool panning = false;
+    float panX = 0.0f;
+    float panY = 0.0f;
+};
+
+void mouseButtonCallback(GLFWwindow* window, int button, int action, int) {
+    auto* camera = static_cast<Camera*>(glfwGetWindowUserPointer(window));
+
+    if (button == GLFW_MOUSE_BUTTON_LEFT) {
+        camera->dragging = (action == GLFW_PRESS);
+    } else if (button == GLFW_MOUSE_BUTTON_MIDDLE) {
+        camera->panning = (action == GLFW_PRESS);
+    }
+
+    glfwGetCursorPos(window, &camera->lastX, &camera->lastY);
+}
+
+void cursorPositionCallback(GLFWwindow* window, double x, double y) {
+    auto* camera = static_cast<Camera*>(glfwGetWindowUserPointer(window));
+
+    float dx = static_cast<float>(x - camera->lastX);
+    float dy = static_cast<float>(y - camera->lastY);
+    camera->lastX = x;
+    camera->lastY = y;
+
+    if (camera->dragging) {
+        constexpr float sensitivity = 0.01f;
+        camera->yaw += dx * sensitivity;
+        camera->pitch += dy * sensitivity;
+        camera->pitch = glm::clamp(camera->pitch, -1.5f, 1.5f);
+    }
+
+    if (camera->panning) {
+        int width = 0;
+        int height = 0;
+        glfwGetWindowSize(window, &width, &height);
+        if (height <= 0) return;
+
+        float worldPerPixel = 2.0f * camera->distance *
+                              glm::tan(glm::radians(45.0f) * 0.5f) / height;
+        camera->panX += dx * worldPerPixel;
+        camera->panY -= dy * worldPerPixel;
+    }
+}
+
+void scrollCallback(GLFWwindow* window, double, double yOffset) {
+    auto* camera = static_cast<Camera*>(glfwGetWindowUserPointer(window));
+    camera->distance *= (yOffset > 0.0) ? 0.9f : 1.1f;
+    camera->distance = glm::clamp(camera->distance, 1.2f, 10.0f);
+}
+
 int main(int argc, char* argv[]) {
     if (argc != 2) {
         std::cerr << "Cach dung: stl-viewer <file.stl>\n";
@@ -141,6 +199,12 @@ int main(int argc, char* argv[]) {
     GLint modelLocation = glGetUniformLocation(program, "uModel");
     GLint viewProjectionLocation = glGetUniformLocation(program, "uViewProjection");
 
+    Camera camera;
+    glfwSetWindowUserPointer(window, &camera);
+    glfwSetMouseButtonCallback(window, mouseButtonCallback);
+    glfwSetCursorPosCallback(window, cursorPositionCallback);
+    glfwSetScrollCallback(window, scrollCallback);
+
     while (!glfwWindowShouldClose(window)) {
         int width = 0;
         int height = 0;
@@ -151,13 +215,14 @@ int main(int argc, char* argv[]) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         float aspect = height > 0 ? static_cast<float>(width) / height : 1.0f;
-        glm::mat4 projection = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 10.0f);
-        glm::mat4 view = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -3.0f));
+        glm::mat4 projection = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 100.0f);
+        glm::mat4 view = glm::translate(glm::mat4(1.0f),
+                                        glm::vec3(camera.panX, camera.panY, -camera.distance));
 
         float scale = 1.0f / mesh.radius;
         glm::mat4 model(1.0f);
-        model = glm::rotate(model, static_cast<float>(glfwGetTime()), glm::vec3(0, 1, 0));
-        model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(1, 0, 0));
+        model = glm::rotate(model, camera.pitch, glm::vec3(1, 0, 0));
+        model = glm::rotate(model, camera.yaw, glm::vec3(0, 1, 0));
         model = glm::scale(model, glm::vec3(scale));
         model = glm::translate(model, -mesh.center);
 
