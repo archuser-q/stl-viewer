@@ -3,20 +3,34 @@
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 #include <iostream>
+#include "stl_loader.h"
+#include <cstddef>
+#include <exception>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 const char* vertexSource = R"(
 #version 330 core
 layout (location = 0) in vec3 aPos;
+layout (location = 1) in vec3 aNormal;
+uniform mat4 uModel;
+uniform mat4 uViewProjection;
+out vec3 vNormal;
 void main() {
-    gl_Position = vec4(aPos, 1.0);
+    vNormal = mat3(uModel) * aNormal;
+    gl_Position = uViewProjection * uModel * vec4(aPos, 1.0);
 }
 )";
 
 const char* fragmentSource = R"(
 #version 330 core
+in vec3 vNormal;
 out vec4 FragColor;
 void main() {
-    FragColor = vec4(0.40, 0.65, 0.95, 1.0);
+    vec3 lightDirection = normalize(vec3(0.4, 0.7, 1.0));
+    float diffuse = max(dot(normalize(vNormal), lightDirection), 0.0);
+    vec3 color = vec3(0.30, 0.65, 0.95) * (0.25 + 0.75 * diffuse);
+    FragColor = vec4(color, 1.0);
 }
 )";
 
@@ -57,7 +71,20 @@ GLuint createProgram() {
     return program;
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+    if (argc != 2) {
+        std::cerr << "Cach dung: stl-viewer <file.stl>\n";
+        return 1;
+    }
+
+    Mesh mesh;
+    try {
+        mesh = loadBinaryStl(argv[1]);
+    } catch (const std::exception& error) {
+        std::cerr << error.what() << "\n";
+        return 1;
+    }
+
     if (!glfwInit()) {
         std::cerr << "Khong khoi tao duoc GLFW\n";
         return 1;
@@ -96,12 +123,23 @@ int main() {
 
     glBindVertexArray(vao);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER,
+            mesh.vertices.size() * sizeof(Vertex),
+            mesh.vertices.data(),
+            GL_STATIC_DRAW);
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                          (void*)offsetof(Vertex, position));
     glEnableVertexAttribArray(0);
 
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                          (void*)offsetof(Vertex, normal));
+    glEnableVertexAttribArray(1);
+
     GLuint program = createProgram();
+    glEnable(GL_DEPTH_TEST);
+    GLint modelLocation = glGetUniformLocation(program, "uModel");
+    GLint viewProjectionLocation = glGetUniformLocation(program, "uViewProjection");
 
     while (!glfwWindowShouldClose(window)) {
         int width = 0;
@@ -110,11 +148,26 @@ int main() {
         glViewport(0, 0, width, height);
 
         glClearColor(0.15f, 0.17f, 0.20f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        float aspect = height > 0 ? static_cast<float>(width) / height : 1.0f;
+        glm::mat4 projection = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 10.0f);
+        glm::mat4 view = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -3.0f));
+
+        float scale = 1.0f / mesh.radius;
+        glm::mat4 model(1.0f);
+        model = glm::rotate(model, static_cast<float>(glfwGetTime()), glm::vec3(0, 1, 0));
+        model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(1, 0, 0));
+        model = glm::scale(model, glm::vec3(scale));
+        model = glm::translate(model, -mesh.center);
+
+        glm::mat4 viewProjection = projection * view;
 
         glUseProgram(program);
+        glUniformMatrix4fv(modelLocation, 1, GL_FALSE, glm::value_ptr(model));
+        glUniformMatrix4fv(viewProjectionLocation, 1, GL_FALSE, glm::value_ptr(viewProjection));
         glBindVertexArray(vao);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+        glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(mesh.vertices.size()));
 
         glfwSwapBuffers(window);
         glfwPollEvents();
