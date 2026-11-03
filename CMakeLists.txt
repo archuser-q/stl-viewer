@@ -19,3 +19,4 @@ find_package(OpenGL REQUIRED)
 
 add_executable(stl-viewer src/main.cpp)
 target_link_libraries(stl-viewer PRIVATE glfw OpenGL::GL)
+target_include_directories(stl-viewer PRIVATE ${glfw_SOURCE_DIR}/deps)
