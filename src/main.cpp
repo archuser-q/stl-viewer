@@ -8,6 +8,12 @@
 #include <exception>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
+#include <nfd.h>
+#include <string>
+#include <utility>
 
 const char* vertexSource = R"(
 #version 330 core
@@ -85,6 +91,7 @@ struct Camera {
 
 void mouseButtonCallback(GLFWwindow* window, int button, int action, int) {
     auto* camera = static_cast<Camera*>(glfwGetWindowUserPointer(window));
+    if (action == GLFW_PRESS && ImGui::GetIO().WantCaptureMouse) return;
 
     if (button == GLFW_MOUSE_BUTTON_LEFT) {
         camera->dragging = (action == GLFW_PRESS);
@@ -124,24 +131,28 @@ void cursorPositionCallback(GLFWwindow* window, double x, double y) {
 }
 
 void scrollCallback(GLFWwindow* window, double, double yOffset) {
+    if (ImGui::GetIO().WantCaptureMouse) return;
     auto* camera = static_cast<Camera*>(glfwGetWindowUserPointer(window));
     camera->distance *= (yOffset > 0.0) ? 0.9f : 1.1f;
     camera->distance = glm::clamp(camera->distance, 1.2f, 10.0f);
 }
 
-int main(int argc, char* argv[]) {
-    if (argc != 2) {
-        std::cerr << "Cach dung: stl-viewer <file.stl>\n";
-        return 1;
-    }
+std::string chooseStlFile() {
+    nfdu8char_t* outPath = nullptr;
+    nfdu8filteritem_t filters[1] = {{"STL model", "stl,STL"}};
 
-    Mesh mesh;
-    try {
-        mesh = loadBinaryStl(argv[1]);
-    } catch (const std::exception& error) {
-        std::cerr << error.what() << "\n";
-        return 1;
+    std::string path;
+    if (NFD_OpenDialogU8(&outPath, filters, 1, nullptr) == NFD_OKAY) {
+        path = outPath;
+        NFD_FreePathU8(outPath);
     }
+    return path;
+}
+
+int main(int argc, char* argv[]) {
+    Mesh mesh;
+    bool hasMesh = false;
+    std::string errorMessage;
 
     if (!glfwInit()) {
         std::cerr << "Khong khoi tao duoc GLFW\n";
@@ -168,6 +179,12 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    if (NFD_Init() != NFD_OKAY) {
+        std::cerr << "Khong khoi tao duoc hop thoai file\n";
+        glfwTerminate();
+        return 1;
+    }
+
     float vertices[] = {
         -0.5f, -0.5f, 0.0f,
          0.5f, -0.5f, 0.0f,
@@ -181,10 +198,6 @@ int main(int argc, char* argv[]) {
 
     glBindVertexArray(vao);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER,
-            mesh.vertices.size() * sizeof(Vertex),
-            mesh.vertices.data(),
-            GL_STATIC_DRAW);
 
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
                           (void*)offsetof(Vertex, position));
@@ -205,38 +218,121 @@ int main(int argc, char* argv[]) {
     glfwSetCursorPosCallback(window, cursorPositionCallback);
     glfwSetScrollCallback(window, scrollCallback);
 
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init("#version 330");
+
+    auto openFile = [&](const std::string& path) {
+        try {
+            Mesh loaded = loadBinaryStl(path);
+            glBindBuffer(GL_ARRAY_BUFFER, vbo);
+            glBufferData(GL_ARRAY_BUFFER,
+                         loaded.vertices.size() * sizeof(Vertex),
+                         loaded.vertices.data(),
+                         GL_STATIC_DRAW);
+            mesh = std::move(loaded);
+            hasMesh = true;
+            camera = Camera{};
+            errorMessage.clear();
+        } catch (const std::exception& error) {
+            errorMessage = error.what();
+        }
+    };
+
+    if (argc >= 2) openFile(argv[1]);
+
     while (!glfwWindowShouldClose(window)) {
+        glfwPollEvents();
+
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        const ImGuiWindowFlags panelFlags = ImGuiWindowFlags_NoDecoration |
+                                            ImGuiWindowFlags_NoMove |
+                                            ImGuiWindowFlags_NoSavedSettings;
+
+        bool requestOpen = false;
+        ImGuiIO& io = ImGui::GetIO();
+
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_O, false)) requestOpen = true;
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Q, false)) {
+            glfwSetWindowShouldClose(window, GLFW_TRUE);
+        }
+
+        if (ImGui::BeginMainMenuBar()) {
+            if (ImGui::BeginMenu("File")) {
+                if (ImGui::MenuItem("Open File...", "Ctrl+O")) requestOpen = true;
+
+                if (ImGui::MenuItem("Close File", nullptr, false, hasMesh)) {
+                    mesh = Mesh{};
+                    hasMesh = false;
+                    errorMessage.clear();
+                }
+
+                ImGui::Separator();
+
+                if (ImGui::MenuItem("Exit", "Ctrl+Q")) {
+                    glfwSetWindowShouldClose(window, GLFW_TRUE);
+                }
+                ImGui::EndMenu();
+            }
+            ImGui::EndMainMenuBar();
+        }
+
+        if (requestOpen) {
+            std::string path = chooseStlFile();
+            if (!path.empty()) openFile(path);
+        }
+
+        if (!errorMessage.empty()) {
+            ImGui::SetNextWindowPos(ImVec2(16, viewport->Size.y - 56));
+            ImGui::Begin("Error", nullptr, panelFlags | ImGuiWindowFlags_AlwaysAutoResize);
+            ImGui::TextUnformatted(errorMessage.c_str());
+            ImGui::End();
+        }
+
         int width = 0;
         int height = 0;
         glfwGetFramebufferSize(window, &width, &height);
         glViewport(0, 0, width, height);
-
         glClearColor(0.15f, 0.17f, 0.20f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        float aspect = height > 0 ? static_cast<float>(width) / height : 1.0f;
-        glm::mat4 projection = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 100.0f);
-        glm::mat4 view = glm::translate(glm::mat4(1.0f),
-                                        glm::vec3(camera.panX, camera.panY, -camera.distance));
+        if (hasMesh) {
+            float aspect = height > 0 ? static_cast<float>(width) / height : 1.0f;
+            glm::mat4 projection = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 100.0f);
+            glm::mat4 view = glm::translate(glm::mat4(1.0f),
+                                            glm::vec3(camera.panX, camera.panY, -camera.distance));
 
-        float scale = 1.0f / mesh.radius;
-        glm::mat4 model(1.0f);
-        model = glm::rotate(model, camera.pitch, glm::vec3(1, 0, 0));
-        model = glm::rotate(model, camera.yaw, glm::vec3(0, 1, 0));
-        model = glm::scale(model, glm::vec3(scale));
-        model = glm::translate(model, -mesh.center);
+            float scale = 1.0f / mesh.radius;
+            glm::mat4 model(1.0f);
+            model = glm::rotate(model, camera.pitch, glm::vec3(1, 0, 0));
+            model = glm::rotate(model, camera.yaw, glm::vec3(0, 1, 0));
+            model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(1, 0, 0));
+            model = glm::scale(model, glm::vec3(scale));
+            model = glm::translate(model, -mesh.center);
 
-        glm::mat4 viewProjection = projection * view;
+            glm::mat4 viewProjection = projection * view;
 
-        glUseProgram(program);
-        glUniformMatrix4fv(modelLocation, 1, GL_FALSE, glm::value_ptr(model));
-        glUniformMatrix4fv(viewProjectionLocation, 1, GL_FALSE, glm::value_ptr(viewProjection));
-        glBindVertexArray(vao);
-        glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(mesh.vertices.size()));
+            glUseProgram(program);
+            glUniformMatrix4fv(modelLocation, 1, GL_FALSE, glm::value_ptr(model));
+            glUniformMatrix4fv(viewProjectionLocation, 1, GL_FALSE, glm::value_ptr(viewProjection));
+            glBindVertexArray(vao);
+            glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(mesh.vertices.size()));
+        }
 
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         glfwSwapBuffers(window);
-        glfwPollEvents();
     }
+
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+    NFD_Quit();
 
     glDeleteProgram(program);
     glDeleteBuffers(1, &vbo);
