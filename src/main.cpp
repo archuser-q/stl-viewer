@@ -15,15 +15,14 @@ int main() {
     }
 
     glfwMakeContextCurrent(window);
-    glfwSwapInterval(1); // Giới hạn FPS theo màn hình
+    glfwSwapInterval(1);
 
-    // Vòng lặp chính: chạy đến khi người dùng đóng cửa sổ
     while (!glfwWindowShouldClose(window)) {
-        glClearColor(0.15f, 0.17f, 0.20f, 1.0f); // Chọn màu nền
-        glClear(GL_COLOR_BUFFER_BIT);            // Tô nền
+        glClearColor(0.15f, 0.17f, 0.20f, 1.0f); 
+        glClear(GL_COLOR_BUFFER_BIT);            
 
-        glfwSwapBuffers(window); // Đưa khung hình lên màn hình
-        glfwPollEvents();        // Nhận sự kiện chuột, bàn phím
+        glfwSwapBuffers(window); 
+        glfwPollEvents();        
     }
 
     glfwDestroyWindow(window);
