@@ -34,4 +34,6 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: build/Release/stl-viewer.exe
+          files: |
+            build/Release/stl-viewer.exe
+            install.sh
