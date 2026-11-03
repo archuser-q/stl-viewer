@@ -14,6 +14,7 @@
 #include <nfd.h>
 #include <string>
 #include <utility>
+#include <filesystem>
 
 const char* vertexSource = R"(
 #version 330 core
@@ -149,6 +150,31 @@ std::string chooseStlFile() {
     return path;
 }
 
+void applyUiStyle() {
+    ImGuiIO& io = ImGui::GetIO();
+    const char* fontPath = "/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf";
+    if (std::filesystem::exists(fontPath)) {
+        io.Fonts->AddFontFromFileTTF(fontPath, 18.0f);
+    }
+
+    ImGui::StyleColorsDark();
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.WindowRounding = 8.0f;
+    style.PopupRounding = 8.0f;
+    style.FrameRounding = 6.0f;
+    style.WindowBorderSize = 0.0f;
+    style.PopupBorderSize = 1.0f;
+    style.FramePadding = ImVec2(10, 7);
+    style.ItemSpacing = ImVec2(10, 8);
+
+    ImVec4* colors = style.Colors;
+    colors[ImGuiCol_MenuBarBg] = ImVec4(0.09f, 0.10f, 0.12f, 1.0f);
+    colors[ImGuiCol_PopupBg] = ImVec4(0.13f, 0.14f, 0.17f, 0.98f);
+    colors[ImGuiCol_Header] = ImVec4(0.20f, 0.42f, 0.70f, 0.70f);
+    colors[ImGuiCol_HeaderHovered] = ImVec4(0.24f, 0.50f, 0.82f, 0.90f);
+    colors[ImGuiCol_HeaderActive] = ImVec4(0.24f, 0.50f, 0.82f, 1.0f);
+}
+
 int main(int argc, char* argv[]) {
     Mesh mesh;
     bool hasMesh = false;
@@ -220,6 +246,7 @@ int main(int argc, char* argv[]) {
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
+    applyUiStyle();
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
 
@@ -282,6 +309,16 @@ int main(int argc, char* argv[]) {
             ImGui::EndMainMenuBar();
         }
 
+        if (!hasMesh) {
+            const char* hint = "Press Ctrl+O to open an STL file";
+            ImVec2 textSize = ImGui::CalcTextSize(hint);
+            ImVec2 center = viewport->GetCenter();
+            ImGui::GetBackgroundDrawList()->AddText(
+                ImVec2(center.x - textSize.x * 0.5f, center.y - textSize.y * 0.5f),
+                IM_COL32(150, 158, 170, 255),
+                hint);
+        }
+        
         if (requestOpen) {
             std::string path = chooseStlFile();
             if (!path.empty()) openFile(path);
@@ -298,7 +335,7 @@ int main(int argc, char* argv[]) {
         int height = 0;
         glfwGetFramebufferSize(window, &width, &height);
         glViewport(0, 0, width, height);
-        glClearColor(0.15f, 0.17f, 0.20f, 1.0f);
+        glClearColor(0.11f, 0.12f, 0.14f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         if (hasMesh) {
