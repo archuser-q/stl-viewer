@@ -153,12 +153,15 @@ std::string chooseStlFile() {
     return path;
 }
 
+extern const unsigned char kFontData[];
+extern const unsigned int kFontSize;
+
 void applyUiStyle() {
     ImGuiIO& io = ImGui::GetIO();
-    const char* fontPath = "/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf";
-    if (std::filesystem::exists(fontPath)) {
-        io.Fonts->AddFontFromFileTTF(fontPath, 18.0f);
-    }
+    ImFontConfig fontConfig;
+    fontConfig.FontDataOwnedByAtlas = false;
+    io.Fonts->AddFontFromMemoryTTF(const_cast<unsigned char*>(kFontData),
+                                   static_cast<int>(kFontSize), 18.0f, &fontConfig);
 
     ImGui::StyleColorsDark();
     ImGuiStyle& style = ImGui::GetStyle();

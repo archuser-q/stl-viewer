@@ -48,6 +48,20 @@ target_include_directories(imgui_lib PUBLIC
     ${imgui_SOURCE_DIR}/backends)
 target_link_libraries(imgui_lib PUBLIC glfw OpenGL::GL)
 
-add_executable(stl-viewer src/main.cpp src/stl_loader.cpp src/threemf_loader.cpp)
+set(FONT_FILE ${PROJECT_SOURCE_DIR}/assets/font.ttf)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${FONT_FILE})
+file(READ ${FONT_FILE} FONT_HEX HEX)
+string(LENGTH "${FONT_HEX}" FONT_HEX_LENGTH)
+math(EXPR FONT_SIZE "${FONT_HEX_LENGTH} / 2")
+string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," FONT_ARRAY "${FONT_HEX}")
+file(WRITE ${PROJECT_BINARY_DIR}/font_data.cpp
+"extern const unsigned char kFontData[];
+extern const unsigned int kFontSize;
+const unsigned char kFontData[] = {${FONT_ARRAY}};
+const unsigned int kFontSize = ${FONT_SIZE};
+")
+
+add_executable(stl-viewer src/main.cpp src/stl_loader.cpp src/threemf_loader.cpp
+    ${PROJECT_BINARY_DIR}/font_data.cpp)
 target_link_libraries(stl-viewer PRIVATE glfw glm::glm OpenGL::GL imgui_lib nfd miniz pugixml::pugixml)
 target_include_directories(stl-viewer PRIVATE ${glfw_SOURCE_DIR}/deps)
