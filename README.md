@@ -1,16 +1,18 @@
 # STL Viewer
 
-A lightweight desktop application for viewing binary STL 3D models, built with modern C++ and OpenGL.
+A lightweight desktop application for viewing 3D models in binary STL and 3MF formats, built with modern C++ and OpenGL.
 
 **[Download the latest version](https://github.com/archuser-q/stl-viewer/releases/latest)** for Windows or Linux.
 
 ## Features
 
-- Open binary STL files from the File menu or the command line
+- Open binary STL and 3MF files from the File menu or the command line
+- Read 3MF packages directly: ZIP extraction, XML parsing, build items, transforms, and nested components
 - Rotate, pan, and zoom with the mouse
 - Automatically center and fit models to the view
 - Render models with OpenGL shaders and directional lighting
 - Show clear error messages for invalid files
+- Embed the UI font in the executable so the interface looks the same on every platform
 - Build for Windows and Linux with GitHub Actions
 
 ## Controls
@@ -31,6 +33,8 @@ A lightweight desktop application for viewing binary STL 3D models, built with m
 - GLM
 - Dear ImGui
 - Native File Dialog Extended
+- miniz (ZIP reading)
+- pugixml (XML parsing)
 - CMake
 - GitHub Actions
 
@@ -67,7 +71,7 @@ git clone https://github.com/archuser-q/stl-viewer.git
 cd stl-viewer
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
-./build/stl-viewer path/to/model.stl
+./build/stl-viewer path/to/model.stl   # or model.3mf
 ```
 
 ### Windows
@@ -86,11 +90,15 @@ cmake --build build --config Release
 
 ```text
 .
-├── .github/workflows/   # Windows and AppImage builds
+├── .github/workflows/     # Windows and AppImage builds
+├── assets/
+│   └── font.ttf           # UI font embedded at build time
 ├── src/
-│   ├── main.cpp         # Window, UI, input, and rendering
-│   ├── stl_loader.cpp   # Binary STL parser
-│   └── stl_loader.h     # Mesh data structures
+│   ├── main.cpp           # Window, UI, input, and rendering
+│   ├── stl_loader.cpp     # Binary STL parser
+│   ├── stl_loader.h       # Mesh data structures
+│   ├── threemf_loader.cpp # 3MF package parser
+│   └── threemf_loader.h
 ├── CMakeLists.txt
 └── icon.png
 ```
@@ -98,3 +106,8 @@ cmake --build build --config Release
 ## Limitations
 
 - ASCII STL files are not supported yet.
+- 3MF colors, materials, and textures are ignored. Only geometry is displayed.
+
+## Credits
+
+The UI font is [Ubuntu](https://design.ubuntu.com/font), used under the Ubuntu Font Licence.
