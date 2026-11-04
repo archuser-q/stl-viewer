@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(StlViewer LANGUAGES C CXX)
 
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -18,11 +19,20 @@ FetchContent_Declare(imgui
 FetchContent_Declare(nfd
     GIT_REPOSITORY https://github.com/btzy/nativefiledialog-extended.git
     GIT_TAG v1.2.1)
+FetchContent_Declare(miniz
+    GIT_REPOSITORY https://github.com/richgel999/miniz.git
+    GIT_TAG 3.0.2)
+FetchContent_Declare(pugixml
+    GIT_REPOSITORY https://github.com/zeux/pugixml.git
+    GIT_TAG v1.14)
 
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(glfw glm imgui nfd)
+set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(BUILD_FUZZERS OFF CACHE BOOL "" FORCE)
+set(INSTALL_PROJECT OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(glfw glm imgui nfd miniz pugixml)
 
 find_package(OpenGL REQUIRED)
 
@@ -38,6 +48,6 @@ target_include_directories(imgui_lib PUBLIC
     ${imgui_SOURCE_DIR}/backends)
 target_link_libraries(imgui_lib PUBLIC glfw OpenGL::GL)
 
-add_executable(stl-viewer src/main.cpp src/stl_loader.cpp)
-target_link_libraries(stl-viewer PRIVATE glfw glm::glm OpenGL::GL imgui_lib nfd)
+add_executable(stl-viewer src/main.cpp src/stl_loader.cpp src/threemf_loader.cpp)
+target_link_libraries(stl-viewer PRIVATE glfw glm::glm OpenGL::GL imgui_lib nfd miniz pugixml::pugixml)
 target_include_directories(stl-viewer PRIVATE ${glfw_SOURCE_DIR}/deps)

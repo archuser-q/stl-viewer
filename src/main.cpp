@@ -15,6 +15,9 @@
 #include <string>
 #include <utility>
 #include <filesystem>
+#include "threemf_loader.h"
+#include <algorithm>
+#include <cctype>
 
 const char* vertexSource = R"(
 #version 330 core
@@ -140,7 +143,7 @@ void scrollCallback(GLFWwindow* window, double, double yOffset) {
 
 std::string chooseStlFile() {
     nfdu8char_t* outPath = nullptr;
-    nfdu8filteritem_t filters[1] = {{"STL model", "stl,STL"}};
+    nfdu8filteritem_t filters[1] = {{"3D models", "stl,STL,3mf,3MF"}};
 
     std::string path;
     if (NFD_OpenDialogU8(&outPath, filters, 1, nullptr) == NFD_OKAY) {
@@ -173,6 +176,15 @@ void applyUiStyle() {
     colors[ImGuiCol_Header] = ImVec4(0.20f, 0.42f, 0.70f, 0.70f);
     colors[ImGuiCol_HeaderHovered] = ImVec4(0.24f, 0.50f, 0.82f, 0.90f);
     colors[ImGuiCol_HeaderActive] = ImVec4(0.24f, 0.50f, 0.82f, 1.0f);
+}
+
+Mesh loadModelFile(const std::string& path) {
+    std::string extension = std::filesystem::path(path).extension().string();
+    std::transform(extension.begin(), extension.end(), extension.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+    if (extension == ".3mf") return load3mf(path);
+    return loadBinaryStl(path);
 }
 
 int main(int argc, char* argv[]) {
@@ -252,7 +264,7 @@ int main(int argc, char* argv[]) {
 
     auto openFile = [&](const std::string& path) {
         try {
-            Mesh loaded = loadBinaryStl(path);
+            Mesh loaded = loadModelFile(path);
             glBindBuffer(GL_ARRAY_BUFFER, vbo);
             glBufferData(GL_ARRAY_BUFFER,
                          loaded.vertices.size() * sizeof(Vertex),
@@ -310,7 +322,7 @@ int main(int argc, char* argv[]) {
         }
 
         if (!hasMesh) {
-            const char* hint = "Press Ctrl+O to open an STL file";
+            const char* hint = "Press Ctrl+O to open an STL or 3MF file";
             ImVec2 textSize = ImGui::CalcTextSize(hint);
             ImVec2 center = viewport->GetCenter();
             ImGui::GetBackgroundDrawList()->AddText(
